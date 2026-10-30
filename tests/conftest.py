@@ -122,11 +122,32 @@ class FakeBot:
         self.calls.append(("dice", chat_id, emoji))
 
 
+class FakeJobQueue:
+    def __init__(self):
+        self.scheduled: list[tuple] = []
+        self.removed = 0
+
+    def get_jobs_by_name(self, name):
+        queue = self
+
+        class Job:
+            def schedule_removal(self):
+                queue.removed += 1
+
+        return [Job() for item in self.scheduled if item[3] == name]
+
+    def run_once(self, callback, when, chat_id=None, name=None):
+        self.scheduled.append((callback, when, chat_id, name))
+
+
 @pytest.fixture
 def fake_context(services):
     def make(bot: FakeBot | None = None, args: list[str] | None = None):
         app = SimpleNamespace(bot_data={SERVICES_KEY: services})
-        return SimpleNamespace(application=app, bot=bot or FakeBot(), args=args or [], chat_data={}, user_data={})
+        return SimpleNamespace(
+            application=app, bot=bot or FakeBot(), args=args or [], chat_data={}, user_data={},
+            job_queue=FakeJobQueue(), job=None,
+        )
 
     return make
 

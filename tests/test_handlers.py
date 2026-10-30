@@ -140,8 +140,9 @@ class TestChatFlow:
         ctx = fake_context(args=["как", "дела"])
         await chat.ask_command(make_update(message), ctx)
         assert message.replies == ["Ответ AI"]
-        history = ctx.chat_data[chat.HISTORY_KEY]
-        assert history[0].content == "Айдос: как дела" and history[1].content == "Ответ AI"
+        log = ctx.chat_data[chat.LOG_KEY]
+        assert (log[0].author, log[0].text) == ("Айдос", "как дела")
+        assert log[1].text == "Ответ AI" and log[1].from_bot
 
     async def test_ask_without_question(self, fake_context):
         message = FakeMessage("/ask")
@@ -155,9 +156,9 @@ class TestChatFlow:
 
     async def test_reset(self, fake_context):
         ctx = fake_context()
-        ctx.chat_data[chat.HISTORY_KEY] = ("x",)
+        ctx.chat_data[chat.LOG_KEY] = ("x",)
         await chat.reset_command(make_update(FakeMessage("/reset")), ctx)
-        assert ctx.chat_data[chat.HISTORY_KEY] == ()
+        assert ctx.chat_data[chat.LOG_KEY] == ()
 
 
 class TestGamesHandlers:

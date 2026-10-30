@@ -48,6 +48,7 @@ class Settings:
     port: int | None
     delete_title_service_msg: bool
     birthday_remind_days: int
+    ambient_mode: str = "normal"
 
 
 def parse_int_list(raw: str, name: str) -> tuple[int, ...]:
@@ -100,6 +101,16 @@ def validate_title_template(template: str) -> str:
     return template
 
 
+AMBIENT_MODES = ("off", "quiet", "normal", "active")
+
+
+def parse_ambient_mode(raw: str) -> str:
+    mode = raw.strip().lower()
+    if mode not in AMBIENT_MODES:
+        raise ConfigError(f"AMBIENT_MODE: «{raw}», допустимо: {', '.join(AMBIENT_MODES)}")
+    return mode
+
+
 def parse_bool(raw: str) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on", "да"}
 
@@ -133,4 +144,5 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         port=port,
         delete_title_service_msg=parse_bool(env.get("DELETE_TITLE_SERVICE_MSG", "true")),
         birthday_remind_days=remind_days,
+        ambient_mode=parse_ambient_mode(env.get("AMBIENT_MODE", "normal")),
     )

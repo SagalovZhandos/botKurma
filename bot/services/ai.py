@@ -17,11 +17,14 @@ POLLINATIONS_MODEL = "openai"
 THINK_BLOCK = re.compile(r"<think>.*?</think>", re.DOTALL)
 
 SYSTEM_PROMPT = (
-    "Ты — весёлый и полезный бот в Telegram-чате друзей из Казахстана (Алматы, Астана, Актобе). "
-    "Отвечай на языке вопроса (русский или казахский), дружелюбно, по делу и коротко — "
-    "обычно до 5–6 предложений, если не просят подробнее. "
-    "Не используй Markdown-разметку (звёздочки, решётки), пиши обычным текстом, эмодзи можно. "
-    "Если не знаешь точного ответа или он зависит от свежих данных — честно скажи об этом."
+    "Ты — умный и весёлый друг в Telegram-чате компании друзей из Казахстана (Алматы, Астана, Актобе). "
+    "Ты видишь последние сообщения чата в формате «Имя: текст»; твои прошлые реплики — от assistant. "
+    "Общайся как свой: на языке собеседника (русский или казахский), тепло, с юмором, по делу и коротко — "
+    "обычно 1–4 предложения, подробнее только если просят. Обращайся по имени, помни, о чём говорили. "
+    "Не используй Markdown-разметку (звёздочки, решётки), пиши обычным текстом, эмодзи можно, но в меру. "
+    "Если не знаешь точного ответа или он зависит от свежих данных — честно скажи об этом. "
+    "У тебя в чате есть команды, предлагай их к месту: /weather — погода, /air — качество воздуха, "
+    "/rates — курс валют, /img — нарисовать картинку, /poll — опрос, /birthdays — дни рождения."
 )
 
 
@@ -67,7 +70,9 @@ class AIClient:
         self._client = client
         self._providers = providers
 
-    async def _ask(self, provider: Provider, messages: tuple[Message, ...], max_tokens: int) -> str:
+    async def _ask(
+        self, provider: Provider, messages: tuple[Message, ...], max_tokens: int, reasoning: str = "low"
+    ) -> str:
         headers = {"Authorization": f"Bearer {provider.api_key}"} if provider.api_key else {}
         payload = {
             "model": provider.model,
@@ -75,6 +80,9 @@ class AIClient:
             "max_tokens": max_tokens,
             "temperature": 0.7,
         }
+        if "gpt-oss" in provider.model:
+            # Рассуждающая модель: low — быстрее и дешевле; medium — для тонких решений («встревать ли?»).
+            payload["reasoning_effort"] = reasoning
         response = await self._client.post(provider.url, json=payload, headers=headers, timeout=60)
         response.raise_for_status()
         answer = clean_answer(response.json()["choices"][0]["message"]["content"] or "")
@@ -82,17 +90,32 @@ class AIClient:
             raise AIError(f"{provider.name}: пустой ответ")
         return answer
 
-    async def complete(self, messages: tuple[Message, ...], max_tokens: int = 800) -> str:
-        for provider in self._providers:
+    async def complete(
+        self,
+        messages: tuple[Message, ...],
+        max_tokens: int = 800,
+        primary_only: bool = False,
+        reasoning: str = "low",
+    ) -> str:
+        providers = self._providers[:1] if primary_only else self._providers
+        for provider in providers:
             try:
-                return await self._ask(provider, messages, max_tokens)
+                return await self._ask(provider, messages, max_tokens, reasoning)
             except (httpx.HTTPError, KeyError, IndexError, ValueError, AIError) as exc:
                 logger.warning("AI-провайдер %s не ответил: %s", provider.name, exc)
         raise AIError("Все AI-провайдеры недоступны")
 
-    async def chat(self, history: tuple[Message, ...], question: str) -> str:
-        messages = (Message("system", SYSTEM_PROMPT), *history, Message("user", question))
-        return await self.complete(messages)
+    async def chat(
+        self,
+        conversation: tuple[Message, ...],
+        extra_system: str = "",
+        max_tokens: int = 1200,
+        primary_only: bool = False,
+        reasoning: str = "low",
+    ) -> str:
+        """`conversation` — последние сообщения чата; последняя реплика — то, на что отвечаем."""
+        system = f"{SYSTEM_PROMPT}\n{extra_system}".strip()
+        return await self.complete((Message("system", system), *conversation), max_tokens, primary_only, reasoning)
 
     async def to_image_prompt(self, request: str) -> str:
         """Переводит запрос на английский и слегка уточняет — так генератор картинок понимает лучше."""

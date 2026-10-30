@@ -135,7 +135,7 @@ class TestAI:
             return ai_reply("из запасного")
 
         client = AIClient(mock_client(router), build_providers("https://api.groq.com/v1", "m", "k"))
-        assert await client.chat((Message("user", "a"), Message("assistant", "b")), "вопрос") == "из запасного"
+        assert await client.chat((Message("user", "a"), Message("assistant", "b"))) == "из запасного"
         assert calls == ["api.groq.com", "text.pollinations.ai"]
 
     async def test_sends_key_and_history(self):
@@ -147,9 +147,24 @@ class TestAI:
             return ai_reply("ok")
 
         client = AIClient(mock_client(router), (Provider("p", "https://x.test/c", "model-x", "secret"),))
-        await client.chat((Message("user", "раньше"),), "сейчас")
+        await client.chat((Message("user", "раньше"),), "Сейчас пятница")
         assert captured["auth"] == "Bearer secret"
         assert "model-x" in captured["body"] and "раньше" in captured["body"]
+        assert "Сейчас пятница" in captured["body"] and "reasoning_effort" not in captured["body"]
+
+    async def test_primary_only_and_reasoning_effort(self):
+        calls = []
+
+        def router(request: httpx.Request) -> httpx.Response:
+            calls.append((request.url.host, request.read().decode()))
+            return httpx.Response(429)
+
+        providers = build_providers("https://api.groq.com/v1", "openai/gpt-oss-120b", "k")
+        client = AIClient(mock_client(router), providers)
+        with pytest.raises(AIError):
+            await client.chat((Message("user", "q"),), primary_only=True)
+        assert [h for h, _ in calls] == ["api.groq.com"]  # запасной не тронут
+        assert '"reasoning_effort": "low"' in calls[0][1] or '"reasoning_effort":"low"' in calls[0][1]
 
     async def test_all_fail(self):
         client = AIClient(mock_client(lambda r: ai_reply("")), (Provider("p", "https://x.test", "m"),))
