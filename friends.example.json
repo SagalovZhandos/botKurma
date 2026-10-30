@@ -1,0 +1,7 @@
+{
+  "friends": [
+    { "name": "Айдос", "username": "aidos_kz", "birthday": "15.03.1998" },
+    { "name": "Дана", "username": "dana", "birthday": "02.11" },
+    { "name": "Ерлан", "birthday": "29.02" }
+  ]
+}

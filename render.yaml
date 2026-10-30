@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: friends-chat-bot
+    runtime: docker
+    plan: free
+    region: frankfurt
+    healthCheckPath: /
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: CHAT_IDS
+        sync: false
+      - key: AI_API_KEY
+        sync: false
+      - key: POLLINATIONS_TOKEN
+        sync: false
+      - key: ADMIN_IDS
+        sync: false
+      - key: FRIENDS_FILE
+        value: /etc/secrets/friends.json
+      - key: TZ_NAME
+        value: Asia/Almaty
+      - key: MORNING_TIME
+        value: "08:00"
