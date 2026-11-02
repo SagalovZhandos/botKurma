@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 
 import httpx
@@ -12,6 +12,7 @@ from bot.config import Settings
 from bot.digest import DigestDeps
 from bot.friends import Friend
 from bot.services.ai import AIClient
+from bot.services.weather import WeatherCache
 
 SERVICES_KEY = "services"
 
@@ -22,10 +23,11 @@ class Services:
     http: httpx.AsyncClient
     ai: AIClient
     friends: tuple[Friend, ...]
+    weather_cache: WeatherCache = field(default_factory=WeatherCache)
 
     @property
     def digest_deps(self) -> DigestDeps:
-        return DigestDeps(self.http, self.settings.cities, self.settings.timezone.key)
+        return DigestDeps(self.http, self.settings.cities, self.settings.timezone.key, self.weather_cache)
 
     def today(self) -> date:
         return datetime.now(self.settings.timezone).date()

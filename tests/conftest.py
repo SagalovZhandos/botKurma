@@ -61,6 +61,9 @@ def ai_reply(text: str) -> httpx.Response:
 def api_router(request: httpx.Request) -> httpx.Response:
     host, path = request.url.host, request.url.path
     if host == "api.open-meteo.com":
+        if "," in request.url.params.get("latitude", ""):
+            count = len(request.url.params["latitude"].split(","))
+            return httpx.Response(200, json=[WEATHER_JSON for _ in range(count)])
         return httpx.Response(200, json=WEATHER_JSON)
     if host == "air-quality-api.open-meteo.com":
         return httpx.Response(200, json=AIR_JSON)

@@ -112,4 +112,4 @@ docker run --rm -v "$PWD:/app" -w /app python:3.12-slim sh -c "pip install -q -r
 
 ## Источники данных
 
-Погода и качество воздуха: [Open-Meteo](https://open-meteo.com) (модель CAMS: это расчёт, а не показания станций, поэтому возможна разница с IQAir). Курсы: [Нацбанк РК](https://nationalbank.kz). «В этот день»: Википедия. AI: Groq. Картинки: Pollinations.
+Погода и качество воздуха: [Open-Meteo](https://open-meteo.com) (модель CAMS: это расчёт, а не показания станций, поэтому возможна разница с IQAir). Погода по всем городам загружается одним запросом и кэшируется в памяти на 10 минут. Курсы: [Нацбанк РК](https://nationalbank.kz). «В этот день»: Википедия. AI: Groq. Картинки: Pollinations.

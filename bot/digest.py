@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from typing import Awaitable, TypeVar
 
@@ -23,6 +23,7 @@ class DigestDeps:
     client: httpx.AsyncClient
     cities: tuple[City, ...]
     tz_name: str
+    weather_cache: weather.WeatherCache = field(default_factory=weather.WeatherCache)
 
 
 async def safe(awaitable: Awaitable[T], what: str) -> T | None:
@@ -35,10 +36,11 @@ async def safe(awaitable: Awaitable[T], what: str) -> T | None:
 
 
 async def weather_section(deps: DigestDeps) -> str | None:
-    results = await asyncio.gather(
-        *(safe(weather.fetch_weather(deps.client, c, deps.tz_name), f"погоду {c.name}") for c in deps.cities)
+    results = await safe(
+        weather.fetch_weather_many(deps.client, deps.cities, deps.tz_name, deps.weather_cache),
+        "погоду",
     )
-    lines = [weather.format_weather_line(w) for w in results if w is not None]
+    lines = [weather.format_weather_line(w) for w in results] if results else []
     return "🌤 <b>Погода</b>\n" + "\n".join(lines) if lines else None
 
 

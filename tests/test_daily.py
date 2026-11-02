@@ -33,14 +33,21 @@ class TestDigest:
         assert "Наурыз" in text and "Мысль дня" in text
         assert "Погода" not in text and "Курс" not in text
 
-    async def test_partial_city_failure(self):
+    async def test_weather_uses_one_cached_request_for_all_cities(self):
+        requests = []
+
         def router(request: httpx.Request) -> httpx.Response:
-            if request.url.params.get("latitude") == "51.2":
-                return httpx.Response(500)
+            requests.append(request)
             return api_router(request)
 
-        text = await digest.weather_section(digest.DigestDeps(mock_client(router), CITIES, "Asia/Almaty"))
-        assert "Алматы" in text and "Астана" not in text
+        deps = digest.DigestDeps(mock_client(router), CITIES, "Asia/Almaty")
+        first = await digest.weather_section(deps)
+        second = await digest.weather_section(deps)
+
+        assert first is not None and second == first
+        assert "Алматы" in first and "Астана" in first
+        assert len(requests) == 1
+        assert requests[0].url.params["latitude"] == "43.2,51.2"
 
 
 class TestBirthdays:

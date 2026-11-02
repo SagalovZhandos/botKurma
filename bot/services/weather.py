@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
 import html
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 
 import httpx
 
 from bot.config import City
 
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
+WEATHER_CACHE_TTL = 600
 
 # Коды погоды WMO -> (эмодзи, описание)
 WMO_CODES: dict[int, tuple[str, str]] = {
@@ -55,6 +58,14 @@ class CityWeather:
     wind_max: float
 
 
+@dataclass
+class WeatherCache:
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    key: tuple[str, tuple[tuple[str, float, float], ...]] | None = None
+    results: tuple[CityWeather, ...] | None = None
+    expires_at: float = 0
+
+
 def describe_code(code: int) -> tuple[str, str]:
     return WMO_CODES.get(code, ("🌡", "без описания"))
 
@@ -79,18 +90,50 @@ def parse_weather(city: City, data: dict) -> CityWeather:
 
 
 async def fetch_weather(client: httpx.AsyncClient, city: City, tz_name: str) -> CityWeather:
+    return (await fetch_weather_many(client, (city,), tz_name))[0]
+
+
+async def fetch_weather_many(
+    client: httpx.AsyncClient,
+    cities: tuple[City, ...],
+    tz_name: str,
+    cache: WeatherCache | None = None,
+) -> tuple[CityWeather, ...]:
+    if not cities:
+        return ()
+
+    cache_key = (tz_name, tuple((city.name, city.lat, city.lon) for city in cities))
+    if cache is not None:
+        await cache.lock.acquire()
+        if cache.key == cache_key and cache.results is not None and time.monotonic() < cache.expires_at:
+            cache.lock.release()
+            return cache.results
+
     params = {
-        "latitude": city.lat,
-        "longitude": city.lon,
+        "latitude": ",".join(str(city.lat) for city in cities),
+        "longitude": ",".join(str(city.lon) for city in cities),
         "current": "temperature_2m",
         "daily": "weather_code,temperature_2m_max,temperature_2m_min,"
         "precipitation_probability_max,wind_speed_10m_max",
         "timezone": tz_name,
         "forecast_days": 1,
     }
-    response = await client.get(FORECAST_URL, params=params)
-    response.raise_for_status()
-    return parse_weather(city, response.json())
+    try:
+        response = await client.get(FORECAST_URL, params=params)
+        response.raise_for_status()
+        data = response.json()
+        items = [data] if isinstance(data, dict) else data
+        if not isinstance(items, list) or len(items) != len(cities):
+            raise ValueError(f"Open-Meteo вернул неожиданный ответ для {len(cities)} городов")
+        results = tuple(parse_weather(city, item) for city, item in zip(cities, items, strict=True))
+        if cache is not None:
+            cache.key = cache_key
+            cache.results = results
+            cache.expires_at = time.monotonic() + WEATHER_CACHE_TTL
+        return results
+    finally:
+        if cache is not None:
+            cache.lock.release()
 
 
 def format_weather_line(w: CityWeather) -> str:
